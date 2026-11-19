@@ -111,7 +111,7 @@ class PhotoQueue {
     this.authorize = options.authorize; this.changed = options.changed || (() => {});
     this.transport = options.transport || new DirectUpload();
     this.items = []; this.running = false; this.authorizing = null;
-    this.concurrency = 3;
+    this.concurrency = 2;
     this.recovery = options.recovery;
     this.authorizationTimeoutMs = options.authorizationTimeoutMs ?? 45000;
     this.restoring = !!this.recovery;
