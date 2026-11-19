@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src blob: data:; connect-src https://script.google.com https://script.googleusercontent.com https://www.googleapis.com; base-uri 'none'; form-action 'none'">
+  <title>Una noche, mil recuerdos · Mis XV</title>
+  <link rel="stylesheet" href="./assets/styles.css?v=gallery-2">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Una noche,<br>mil <em>recuerdos.</em></h1>
+      <section id="event-gallery" class="event-gallery" aria-label="Fotos de nuestra noche" hidden>
+        <button id="gallery-open" class="gallery-frame" type="button" aria-label="Ampliar foto y ver la galería" hidden>
+          <img id="gallery-photo" alt="Fotografía de nuestra noche" decoding="async">
+          <span class="gallery-hint">Ver fotos <span aria-hidden="true">⤢</span></span>
+        </button>
+        <p id="gallery-status" class="gallery-status" role="status"></p>
+        <div id="gallery-controls" class="gallery-controls" hidden>
+          <button id="gallery-prev" type="button" aria-label="Foto reciente anterior">‹</button>
+          <button id="gallery-next" type="button" aria-label="Foto reciente siguiente">›</button>
+        </div>
+      </section>
+      <p>Las mejores fotos son las que tú tomas.</p></header>
+    <section class="card" aria-label="Compartir fotografías">
+      <label class="picker">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="4" y="8" width="24" height="19" rx="5"/><path d="m10 8 2-4h8l2 4"/><circle cx="16" cy="17" r="5"/></svg>
+        <strong>Selecciona tus fotos favoritas</strong>
+        <input id="photos-input" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/avif,image/gif,image/tiff,image/bmp,.heic,.heif" multiple aria-label="Selecciona tus fotos favoritas">
+      </label>
+      <p id="selection" class="selection" hidden></p><ul id="photos" class="photos" aria-label="Fotografías seleccionadas"></ul>
+      <button id="send" class="send" type="button" disabled>Enviar fotos</button>
+      <p id="progress" class="progress" role="status" aria-live="polite" hidden><span class="dot" aria-hidden="true"></span><span id="progress-text"></span></p>
+    </section><footer>Tus fotos, nuestros recuerdos.</footer>
+  </main>
+  <dialog id="photo-viewer" class="photo-viewer" aria-label="Galería de nuestra noche">
+    <div class="viewer-top"><span id="viewer-position"></span><button id="viewer-close" type="button" aria-label="Cerrar visor">×</button></div>
+    <div class="viewer-stage"><img id="viewer-photo" alt="Fotografía de nuestra noche" decoding="async"><p id="viewer-status" role="status"></p></div>
+    <div class="viewer-controls"><button id="viewer-prev" type="button" aria-label="Foto anterior">‹</button><button id="viewer-next" type="button" aria-label="Foto siguiente">›</button></div>
+  </dialog>
+  <script src="./assets/config.js" defer></script>
+  <script src="./assets/uploads.js" defer></script>
+  <script src="./assets/authorize.js?v=gallery-1" defer></script>
+  <script src="./assets/app.js?v=gallery-1" defer></script>
+  <script src="./assets/gallery.js?v=gallery-2" defer></script>
+</body>
+</html>

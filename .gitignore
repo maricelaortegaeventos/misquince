@@ -1,0 +1,12 @@
+/*
+!/.gitignore
+!/index.html
+!/.nojekyll
+!/assets/
+/assets/*
+!/assets/app.js
+!/assets/authorize.js
+!/assets/config.js
+!/assets/gallery.js
+!/assets/styles.css
+!/assets/uploads.js
