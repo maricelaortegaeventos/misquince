@@ -1,77 +1,145 @@
 'use strict';
+// Personal history contains only small previews of acknowledged uploads.
+// It has no Drive listing, image endpoint, OAuth token or upload capability.
+class PhotoLibrary {
+  constructor() {
+    this.name='mis-xv-misquince-personal-1';this.db=null;this.memory=new Map();
+    this.pending=Promise.resolve();this.ready=this.initialize();
+  }
+  async initialize() {
+    this.db=await new Promise(resolve=>{
+      if(!globalThis.indexedDB)return resolve(null);
+      let request,done=false;
+      const finish=db=>{if(done){if(db)db.close();return;}done=true;clearTimeout(timer);resolve(db);};
+      const timer=setTimeout(()=>finish(null),3000);
+      try{request=indexedDB.open(this.name,1);}catch(_){finish(null);return;}
+      request.onupgradeneeded=()=>{const db=request.result;db.createObjectStore('meta',{keyPath:'id'});db.createObjectStore('photos',{keyPath:'id'});};
+      request.onerror=request.onblocked=()=>finish(null);
+      request.onsuccess=()=>finish(request.result);
+    });
+    if(this.db)this.db.onversionchange=()=>{this.db.close();this.db=null;};
+    const generated=Array.from(crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join('');
+    this.browserId=await this.transaction('meta','readwrite',store=>{
+      const request=store.get('browser');let identity;
+      request.onsuccess=()=>{identity=request.result?.value;if(!/^[a-f0-9]{32}$/.test(identity||'')){identity=generated;store.put({id:'browser',value:identity});}};
+      return ()=>identity;
+    }) || generated;
+  }
+  async transaction(storeName,mode,work) {
+    if(!this.db)return null;
+    try{return await new Promise(resolve=>{
+      const tx=this.db.transaction(storeName,mode);let done=false;
+      const finish=value=>{if(!done){done=true;clearTimeout(timer);resolve(value);}};
+      const timer=setTimeout(()=>{try{tx.abort();}catch(_){}finish(null);},5000);
+      let result;
+      tx.oncomplete=()=>finish(typeof result==='function'?result():result?.result??true);
+      tx.onabort=tx.onerror=()=>finish(null);
+      try{result=work(tx.objectStore(storeName));}catch(_){try{tx.abort();}catch(_){}finish(null);}
+    });}catch(_){return null;}
+  }
+  async list() {
+    await this.ready;
+    const stored=await this.transaction('photos','readonly',store=>store.getAll()) || [];
+    const records=new Map(stored.map(record=>[record.id,{id:record.id,name:record.name,sentAt:record.sentAt,
+      preview:record.previewBytes?.byteLength>0&&record.previewBytes.byteLength<=524288?new Blob([record.previewBytes],{type:'image/jpeg'}):null}]));
+    for(const [id,record] of this.memory)records.set(id,record);
+    return Array.from(records.values()).sort((a,b)=>b.sentAt-a.sentAt||a.id.localeCompare(b.id));
+  }
+  async thumbnail(file) {
+    const source=URL.createObjectURL(file),img=new Image();
+    let timer;
+    try{
+      await new Promise((resolve,reject)=>{
+        timer=setTimeout(()=>reject(Error('Preview timeout')),12000);
+        img.onload=resolve;img.onerror=()=>reject(Error('Unsupported preview'));img.src=source;
+      });
+      if(!img.naturalWidth||!img.naturalHeight)throw Error('Invalid preview');
+      const scale=Math.min(1,960/Math.max(img.naturalWidth,img.naturalHeight));
+      const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
+      const context=canvas.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(img,0,0,canvas.width,canvas.height);
+      return await new Promise(resolve=>{
+        const limit=setTimeout(()=>resolve(null),3000);
+        canvas.toBlob(blob=>{clearTimeout(limit);resolve(blob&&blob.size<=524288?blob:null);},'image/jpeg',0.72);
+      });
+    }finally{clearTimeout(timer);img.removeAttribute('src');URL.revokeObjectURL(source);}
+  }
+  record(item) {
+    if(!item.completed)return Promise.resolve(false);
+    // Serialize image decoding; never retain decoded originals for the whole batch.
+    const file=item.file,id=item.id,sentAt=Date.now(),name=file.name;
+    const task=async()=>{
+      await this.ready;
+      if(this.memory.has(id))return true;
+      let preview=null;
+      try{preview=await this.thumbnail(file);}catch(_){}
+      const record={id,name,sentAt,preview};
+      this.memory.set(id,record);
+      // ArrayBuffer avoids Blob cloning failures in WebKit. Only the small JPEG
+      // is copied into JS memory; original camera files are never encoded here.
+      const stored={id,name,sentAt,previewBytes:preview?await preview.arrayBuffer():null};
+      await this.transaction('photos','readwrite',store=>store.put(stored));
+      window.dispatchEvent(new Event('personal-photos-updated'));
+      return true;
+    };
+    this.pending=this.pending.then(task,task);return this.pending;
+  }
+}
+globalThis.PhotoLibrary=PhotoLibrary;
+const photoLibrary=new PhotoLibrary();
+
 class EventGallery {
   constructor() {
     this.root=document.getElementById('event-gallery');this.frame=document.getElementById('gallery-open');
     this.photo=document.getElementById('gallery-photo');this.status=document.getElementById('gallery-status');
-    this.controls=document.getElementById('gallery-controls');
+    this.hint=document.getElementById('gallery-hint');this.controls=document.getElementById('gallery-controls');
     this.dialog=document.getElementById('photo-viewer');this.large=document.getElementById('viewer-photo');
     this.viewerStatus=document.getElementById('viewer-status');this.viewerPosition=document.getElementById('viewer-position');
     this.previous=document.getElementById('viewer-prev');this.next=document.getElementById('viewer-next');
-    this.items=[];this.cursor=null;this.recent=0;this.index=0;this.images=new Map();this.pending=new Map();this.chain=Promise.resolve();this.loadingMore=false;this.refreshing=false;this.pauseUntil=0;
-    this.api=createPagesAuthorizer(PHOTO_CONFIG.authorizerUrl).gallery;
+    this.items=[];this.recent=0;this.index=0;this.pauseUntil=0;this.urls=new Map();this.refreshNumber=0;
     this.frame.addEventListener('click',()=>this.open());
     document.getElementById('gallery-prev').addEventListener('click',()=>this.moveRecent(-1));
     document.getElementById('gallery-next').addEventListener('click',()=>this.moveRecent(1));
     this.previous.addEventListener('click',()=>this.moveViewer(-1));this.next.addEventListener('click',()=>this.moveViewer(1));
     document.getElementById('viewer-close').addEventListener('click',()=>this.dialog.close());
-    this.dialog.addEventListener('close',()=>{document.body.classList.remove('viewer-is-open');this.pauseUntil=Date.now()+10000;});
+    this.dialog.addEventListener('close',()=>{document.body.classList.remove('viewer-is-open');this.pauseUntil=Date.now()+10000;this.release(this.large);});
     this.dialog.addEventListener('keydown',e=>{if(e.key==='ArrowRight'){e.preventDefault();this.moveViewer(1);}if(e.key==='ArrowLeft'){e.preventDefault();this.moveViewer(-1);}});
     this.swipe(this.frame,step=>this.moveRecent(step));this.swipe(this.dialog.querySelector('.viewer-stage'),step=>this.moveViewer(step));
-    window.addEventListener('photos-uploaded',()=>setTimeout(()=>this.refresh(),5000));
+    window.addEventListener('personal-photos-updated',()=>this.refresh());
+    window.addEventListener('focus',()=>this.refresh());
+    window.addEventListener('pageshow',()=>this.refresh());
+    window.addEventListener('pagehide',()=>{this.release(this.photo);this.release(this.large);});
     this.ready=this.refresh();
-    this.timer=setInterval(()=>{if(!document.hidden&&!this.dialog.open&&!queue.running&&!this.photo.classList.contains('image-loading')&&Date.now()>this.pauseUntil)this.moveRecent(1,false);},5000);
-    this.refreshTimer=setInterval(()=>{if(!document.hidden&&!this.dialog.open&&!queue.running)this.refresh();},120000);
+    this.timer=setInterval(()=>{if(!document.hidden&&!this.dialog.open&&!globalThis.photoQueue?.running&&Date.now()>this.pauseUntil)this.moveRecent(1,false);},5000);
   }
   swipe(element,move) {
     let start=null;
     element.addEventListener('touchstart',e=>{start=e.touches.length===1?{x:e.touches[0].clientX,y:e.touches[0].clientY}:null;},{passive:true});
     element.addEventListener('touchend',e=>{if(!start)return;const dx=e.changedTouches[0].clientX-start.x,dy=e.changedTouches[0].clientY-start.y;start=null;if(Math.abs(dx)>45&&Math.abs(dx)>Math.abs(dy)*1.5)move(dx<0?1:-1);},{passive:true});
   }
-  request(payload,needed=()=>true) {
-    const work=async()=>{for(let attempt=0;attempt<3;attempt++){
-      if(!needed())throw Object.assign(new Error('Foto omitida.'),{terminal:true});
-      try{const result=await this.api(payload);if(result.ok)return result;if(!result.retryable)throw Object.assign(new Error('Galería no disponible.'),{terminal:true});}
-      catch(error){if(error.terminal||attempt===2)throw error;}
-      if(attempt<2)await new Promise(resolve=>setTimeout(resolve,1000*(attempt+1)));
-    }throw new Error('No se pudo cargar la foto.');};
-    const task=this.chain.then(work,work);this.chain=task.catch(()=>{});return task;
+  release(target) {
+    const source=this.urls.get(target);
+    if(source){URL.revokeObjectURL(source);this.urls.delete(target);}
+    target.removeAttribute('src');
+  }
+  showPicture(target,item,status) {
+    this.release(target);status.textContent='';target.classList.remove('image-loading');
+    target.alt=item.name || 'Fotografía enviada';
+    if(item.preview){const url=URL.createObjectURL(item.preview);this.urls.set(target,url);target.src=url;}
+    else status.textContent='Foto enviada. Este navegador no pudo guardar su vista previa.';
   }
   async refresh() {
-    if(this.refreshing||this.dialog.open||queue.running)return;
-    this.refreshing=true;
-    try {
-      const result=await this.request({action:'gallery'});
-      if(!Array.isArray(result.files))return;
-      this.items=result.files;this.cursor=result.cursor;this.recent=Math.min(this.recent,Math.max(0,this.items.length-1));
-      this.root.hidden=false;this.frame.hidden=!this.items.length;this.controls.hidden=this.items.length<2;
-      this.status.textContent=this.items.length?'':'Las fotos de esta noche aparecerán aquí.';
-      if(this.items.length)await this.showRecent();
-    }catch(_){/* Gallery failure never blocks selecting or sending photographs. */}
-    finally{this.refreshing=false;}
+    const generation=++this.refreshNumber,selected=this.items[this.index]?.id;
+    const items=await photoLibrary.list();if(generation!==this.refreshNumber)return;
+    this.items=items;this.recent=Math.min(this.recent,Math.max(0,Math.min(10,items.length)-1));
+    this.root.hidden=false;this.frame.hidden=false;this.frame.disabled=!items.length;this.hint.hidden=!items.length;this.controls.hidden=items.length<2;
+    this.frame.setAttribute('aria-label',items.length?'Ver mis fotos enviadas':'Aquí aparecerán tus fotos enviadas');
+    if(items.length)this.showRecent();
+    else{this.release(this.photo);this.photo.src='./assets/portada-carrusel.png';this.photo.alt='Celebración de quince años. Aquí aparecerán tus fotos enviadas.';this.status.textContent='';}
+    if(this.dialog.open){this.index=Math.max(0,items.findIndex(item=>item.id===selected));this.showViewer();}
   }
-  image(item) {
-    if(this.images.has(item.id))return Promise.resolve(this.images.get(item.id));
-    if(this.pending.has(item.id))return this.pending.get(item.id);
-    const task=this.request({action:'galleryImage',image:item.image},()=>this.photo.dataset.photo===item.id||(this.dialog.open&&this.large.dataset.photo===item.id)).then(result=>{
-      if(!/^image\/(jpeg|png|webp|gif)$/.test(result.mime)||typeof result.data!=='string'||result.data.length>700000||!/^[A-Za-z0-9+/]*={0,2}$/.test(result.data))throw new Error('Imagen no disponible.');
-      const source='data:'+result.mime+';base64,'+result.data;this.images.set(item.id,source);
-      while(this.images.size>24)this.images.delete(this.images.keys().next().value);
-      return source;
-    }).finally(()=>this.pending.delete(item.id));
-    this.pending.set(item.id,task);return task;
-  }
-  async showPicture(target,item,status) {
-    target.dataset.photo=item.id;target.classList.add('image-loading');status.textContent='';
-    try{const source=await this.image(item);if(target.dataset.photo!==item.id)return;target.src=source;await target.decode().catch(()=>{});}
-    catch(_){if(target.dataset.photo===item.id){target.removeAttribute('src');status.textContent='No se pudo cargar esta foto.';}}
-    finally{if(target.dataset.photo===item.id)target.classList.remove('image-loading');}
-  }
-  async showRecent() {
-    const item=this.items[this.recent];if(!item)return;
-    await this.showPicture(this.photo,item,this.status);
-  }
+  showRecent() {const item=this.items[this.recent];if(item)this.showPicture(this.photo,item,this.status);}
   moveRecent(step,manual=true) {
-    const count=Math.min(this.items.length,10);if(!count)return;
+    const count=Math.min(this.items.length,10);if(count<2)return;
     if(manual)this.pauseUntil=Date.now()+12000;
     this.recent=(this.recent+step+count)%count;this.showRecent();
   }
@@ -80,25 +148,14 @@ class EventGallery {
     this.dialog.showModal();document.body.classList.add('viewer-is-open');this.showViewer();
   }
   showViewer() {
-    this.viewerPosition.textContent=(this.index+1)+(this.cursor?' / '+this.items.length+'+':' / '+this.items.length);
-    this.previous.disabled=this.index===0||this.loadingMore;this.next.disabled=this.loadingMore||(!this.cursor&&this.index>=this.items.length-1);
+    this.viewerPosition.textContent=(this.index+1)+' / '+this.items.length;
+    this.previous.disabled=this.index===0;this.next.disabled=this.index>=this.items.length-1;
     const item=this.items[this.index];if(item)this.showPicture(this.large,item,this.viewerStatus);
   }
-  async moveViewer(step) {
-    if(this.loadingMore)return;let target=this.index+step;if(target<0)return;
-    if(target>=this.items.length&&this.cursor){
-      this.loadingMore=true;this.previous.disabled=true;this.next.disabled=true;this.viewerStatus.textContent='Cargando fotos…';
-      try{
-        // Drive can return empty/overlapping pages while new files arrive; follow the cursor.
-        for(let attempt=0;attempt<4&&target>=this.items.length&&this.cursor;attempt++){
-          const result=await this.request({action:'gallery',cursor:this.cursor});
-          const known=new Set(this.items.map(item=>item.id));this.items.push(...result.files.filter(item=>!known.has(item.id)));this.cursor=result.cursor;
-        }
-      }catch(_){this.viewerStatus.textContent='No se pudieron cargar más fotos.';}
-      finally{this.loadingMore=false;}
-    }
-    if(target<this.items.length)this.index=target;
-    this.showViewer();
+  moveViewer(step) {
+    const target=this.index+step;
+    if(target<0||target>=this.items.length)return;
+    this.index=target;this.showViewer();
   }
 }
 const eventGallery=new EventGallery();

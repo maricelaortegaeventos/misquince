@@ -113,6 +113,7 @@ class PhotoQueue {
     this.items = []; this.running = false; this.authorizing = null;
     this.concurrency = 2;
     this.recovery = options.recovery;
+    this.confirmed = options.confirmed || (() => {});
     this.authorizationTimeoutMs = options.authorizationTimeoutMs ?? 45000;
     this.restoring = !!this.recovery;
     this.ready = this.restore();
@@ -211,6 +212,9 @@ class PhotoQueue {
             await this.session(item);
             await this.checkpoint(item);
             await this.transport.send(item,async current=>{current.state='sending';await this.session(current);});
+            item.completed=true;
+            // A local preview failure must never turn an acknowledged upload into a retry.
+            try { Promise.resolve(this.confirmed(item)).catch(() => {}); } catch (_) {}
             item.state='completed';item.sessionUrl=null;item.permit=null;
             if (this.recovery) await this.recovery.remove(item.id);
           } catch(error) {item.state='failed';item.retryable=error.retryable===true;item.message=error.message||'No se pudo enviar esta fotografía.';}

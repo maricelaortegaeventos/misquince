@@ -4,8 +4,9 @@
     const progress = document.getElementById('progress'), progressText = document.getElementById('progress-text');
     const rows = new Map();
     let removing = false;
-    const authorize = createPagesAuthorizer(PHOTO_CONFIG.authorizerUrl);
-    const queue = new PhotoQueue({authorize, changed: render, recovery: new PhotoRecovery()});
+    const authorize = createPagesAuthorizer(PHOTO_CONFIG.authorizerUrl, {identity:async()=>{await photoLibrary.ready;return photoLibrary.browserId;}});
+    const queue = new PhotoQueue({authorize, changed: render, recovery: new PhotoRecovery(), confirmed:item=>photoLibrary.record(item)});
+    globalThis.photoQueue=queue;
     function render() {
       const busy = queue.running || queue.restoring || queue.starting || removing;
       input.disabled = busy;
@@ -55,7 +56,6 @@
     async function sendBatch() {
       if (removing) return;
       await queue.start();
-      if (queue.items.some(item => item.state === 'completed')) window.dispatchEvent(new Event('photos-uploaded'));
       queue.items = queue.items.filter(item => item.state !== 'completed'); render();
     }
     send.addEventListener('click', sendBatch);

@@ -24,7 +24,10 @@ function createPagesAuthorizer(url, options = {}) {
       return result;
     } finally {clearTimeout(timer);}
   };
-  const authorize = (files,requestId) => request({files,requestId});
-  authorize.gallery = payload => request(payload);
+  const authorize = async (files,requestId) => {
+    if(!qr)return {ok:false,code:'QR',retryable:false,message:'Abre esta página desde el QR de la fiesta.'};
+    const browserId=options.identity?await options.identity():undefined;
+    return request({files,requestId,...(browserId?{browserId}:{})});
+  };
   return authorize;
 }
