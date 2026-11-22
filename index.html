@@ -4,44 +4,59 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src https://script.google.com https://script.googleusercontent.com https://www.googleapis.com; base-uri 'none'; form-action 'none'">
-  <title>Una noche, mil recuerdos · Mis XV</title>
-  <link rel="stylesheet" href="./assets/styles.css?v=personal-2">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' blob: data:; connect-src https://script.google.com https://script.googleusercontent.com https://www.googleapis.com; base-uri 'none'; form-action 'none'">
+  <meta name="theme-color" content="#fcf6ef">
+  <title>Mis XV — Luciana</title>
+  <link rel="stylesheet" href="./assets/styles.css?v=luciana-1">
 </head>
 <body>
   <main>
-    <header>
-      <h1>Una noche,<br>mil <em>recuerdos.</em></h1>
-      <section id="event-gallery" class="event-gallery" aria-label="Mis fotos enviadas">
-        <div class="gallery-shell">
+    <header class="invitation">
+      <div class="invitation-copy">
+        <h1 aria-label="Mis XV — Luciana"><span>Mis XV años</span><em>Luciana</em></h1>
+        <p class="surname">Morelli Botta</p>
+        <div class="ornament" aria-hidden="true">
+          <svg viewBox="0 0 32 24" width="25" height="19" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 11C12 5 5 2 3 4c-2 2 2 9 8 9-5 1-6 7-3 7 3 0 6-4 8-8m0-1c4-6 11-9 13-7 2 2-2 9-8 9 5 1 6 7 3 7-3 0-6-4-8-8m0 0v6m0-8c0-3-1-4-2-5m2 5c0-3 1-4 2-5"/>
+          </svg>
+        </div>
+        <time datetime="2026-12-11">11 de diciembre de 2026</time>
+      </div>
+    </header>
+    <section class="card" aria-label="Compartir fotografías">
+      <p class="invitation-message">«Comparte conmigo los recuerdos de esta noche inolvidable».</p>
+      <label class="picker">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="4" y="8" width="24" height="19" rx="5"/><path d="m10 8 2-4h8l2 4"/><circle cx="16" cy="17" r="5"/></svg>
+        <strong>Selecciona tus fotos favoritas</strong>
+        <input id="photos-input" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/avif,image/gif,image/tiff,image/bmp,.heic,.heif" multiple aria-label="Selecciona tus fotos favoritas">
+      </label>
+      <p id="selection" class="selection" hidden></p>
+      <ul id="photos" class="photos" aria-label="Fotografías seleccionadas"></ul>
+      <button id="send" class="send" type="button" disabled>Enviar fotos</button>
+      <p id="progress" class="progress" role="status" aria-live="polite" hidden><span class="dot" aria-hidden="true"></span><span id="progress-text"></span></p>
+    </section>
+  </main>
+  <!-- El módulo de historial conserva su interfaz DOM fuera de la presentación. -->
+  <div hidden inert>
+    <section id="event-gallery" class="event-gallery" aria-label="Mis fotos enviadas">
+      <div class="gallery-shell">
         <button id="gallery-open" class="gallery-frame" type="button" aria-label="Aquí aparecerán tus fotos enviadas" disabled>
-          <img id="gallery-photo" src="./assets/portada-carrusel.png" alt="Celebración de quince años. Aquí aparecerán tus fotos enviadas." decoding="async">
+          <img id="gallery-photo" alt="Celebración de quince años. Aquí aparecerán tus fotos enviadas." loading="lazy" decoding="async">
           <span id="gallery-hint" class="gallery-hint" hidden>Ver mis fotos enviadas <span aria-hidden="true">⤢</span></span>
         </button>
         <div id="gallery-controls" class="gallery-controls" hidden>
           <button id="gallery-prev" type="button" aria-label="Foto reciente anterior">‹</button>
           <button id="gallery-next" type="button" aria-label="Foto reciente siguiente">›</button>
         </div>
-        </div>
-        <p id="gallery-status" class="gallery-status" role="status"></p>
-      </section>
-      <p>Las mejores fotos son las que tú tomas.</p></header>
-    <section class="card" aria-label="Compartir fotografías">
-      <label class="picker">
-        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="4" y="8" width="24" height="19" rx="5"/><path d="m10 8 2-4h8l2 4"/><circle cx="16" cy="17" r="5"/></svg>
-        <strong>Selecciona tus fotos favoritas</strong>
-        <input id="photos-input" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/avif,image/gif,image/tiff,image/bmp,.heic,.heif" multiple aria-label="Selecciona tus fotos favoritas">
-      </label>
-      <p id="selection" class="selection" hidden></p><ul id="photos" class="photos" aria-label="Fotografías seleccionadas"></ul>
-      <button id="send" class="send" type="button" disabled>Enviar fotos</button>
-      <p id="progress" class="progress" role="status" aria-live="polite" hidden><span class="dot" aria-hidden="true"></span><span id="progress-text"></span></p>
-    </section><footer>Tus fotos, nuestros recuerdos.</footer>
-  </main>
-  <dialog id="photo-viewer" class="photo-viewer" aria-label="Mis fotos enviadas">
-    <div class="viewer-top"><span id="viewer-position"></span><button id="viewer-close" type="button" aria-label="Cerrar visor">×</button></div>
-    <div class="viewer-stage"><img id="viewer-photo" alt="Fotografía enviada" decoding="async"><p id="viewer-status" role="status"></p></div>
-    <div class="viewer-controls"><button id="viewer-prev" type="button" aria-label="Foto anterior">‹</button><button id="viewer-next" type="button" aria-label="Foto siguiente">›</button></div>
-  </dialog>
+      </div>
+      <p id="gallery-status" class="gallery-status" role="status"></p>
+    </section>
+    <dialog id="photo-viewer" class="photo-viewer" aria-label="Mis fotos enviadas">
+      <div class="viewer-top"><span id="viewer-position"></span><button id="viewer-close" type="button" aria-label="Cerrar visor">×</button></div>
+      <div class="viewer-stage"><img id="viewer-photo" alt="Fotografía enviada" decoding="async"><p id="viewer-status" role="status"></p></div>
+      <div class="viewer-controls"><button id="viewer-prev" type="button" aria-label="Foto anterior">‹</button><button id="viewer-next" type="button" aria-label="Foto siguiente">›</button></div>
+    </dialog>
+  </div>
   <script src="./assets/config.js" defer></script>
   <script src="./assets/uploads.js?v=personal-1" defer></script>
   <script src="./assets/authorize.js?v=personal-1" defer></script>
